@@ -26,7 +26,7 @@ export default function NavBar() {
     <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
       <div className="container mx-auto px-4 max-w-6xl flex items-center justify-between h-14">
         <div className="flex items-center gap-1">
-          <span className="font-bold text-blue-600 mr-4 text-sm hidden sm:block">3BLD Trainer</span>
+          <span className="font-medium text-slate-500 mr-4 text-sm hidden sm:block">Letterpair Trainer</span>
           {links.map((l) => (
             <Link
               key={l.href}

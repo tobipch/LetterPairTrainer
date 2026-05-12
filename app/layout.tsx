@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "3BLD Letterpair Trainer",
-  description: "Train your 3x3 blindfolded letterpairs",
+  title: "Letterpair Trainer",
+  description: "Trainiere deine Letterpairs",
 };
 
 export default function RootLayout({
