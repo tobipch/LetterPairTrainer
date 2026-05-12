@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { displayPair } from "@/lib/pairs";
+
+interface ActiveSession {
+  id: number;
+  mode: string;
+  directionSetting: string;
+  startedAt: string;
+}
 
 interface OverviewStats {
   totalCount: number;
@@ -10,12 +16,14 @@ interface OverviewStats {
   streak: number;
   weekSuccessRate: number | null;
   avgDurationMs: number | null;
+  activeSession: ActiveSession | null;
   dailyWord: {
     pair: string;
     word: string;
     description: string | null;
     imageUrl: string | null;
   } | null;
+  dailyWordDone: boolean;
 }
 
 export default function DashboardPage() {
@@ -65,6 +73,7 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const progressPct = stats.totalCount > 0 ? (stats.todayDone / stats.totalCount) * 100 : 0;
+  const { activeSession } = stats;
 
   return (
     <div className="space-y-6">
@@ -115,12 +124,21 @@ export default function DashboardPage() {
 
       {/* Action buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Link
-          href="/train?mode=daily_all"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl text-center text-lg"
-        >
-          Daily All starten
-        </Link>
+        {activeSession ? (
+          <Link
+            href={`/train?continue=${activeSession.id}`}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl text-center text-lg"
+          >
+            Daily All fortfahren
+          </Link>
+        ) : (
+          <Link
+            href="/train?mode=daily_all"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl text-center text-lg"
+          >
+            Daily All starten
+          </Link>
+        )}
         <Link
           href="/train?mode=hard_only"
           className="bg-red-500 hover:bg-red-600 text-white font-semibold py-4 rounded-xl text-center text-lg"
@@ -139,61 +157,91 @@ export default function DashboardPage() {
       {stats.dailyWord && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow p-6">
           <h2 className="font-bold text-lg mb-1">Wort des Tages</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Beschreibe dieses Wort und füge ein Bild hinzu
-          </p>
-          <div className="flex items-start gap-4">
-            {stats.dailyWord.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={stats.dailyWord.imageUrl}
-                alt={stats.dailyWord.word}
-                className="w-24 h-24 rounded-xl object-cover flex-shrink-0"
-              />
-            ) : (
-              <div
-                className="w-24 h-24 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-xs text-center cursor-pointer hover:bg-slate-200 flex-shrink-0"
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploadingDaily ? "…" : "Bild\nhochladen"}
-              </div>
-            )}
-            <div className="flex-1 space-y-3">
+
+          {stats.dailyWordDone ? (
+            // Already filled in — show completed state
+            <div className="flex items-start gap-4 mt-3">
+              {stats.dailyWord.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={stats.dailyWord.imageUrl}
+                  alt={stats.dailyWord.word}
+                  className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+                />
+              )}
               <div>
-                <span className="text-2xl font-bold font-mono">{displayPair(stats.dailyWord.pair)}</span>
-                <span className="ml-3 text-xl text-blue-600 font-semibold">{stats.dailyWord.word}</span>
-              </div>
-              <textarea
-                value={dailyDesc}
-                onChange={(e) => setDailyDesc(e.target.value)}
-                placeholder="Beschreibe das Wort (Aussehen, Geschichte, Eselsbrücke…)"
-                rows={3}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={saveDailyDesc}
-                  disabled={savingDaily}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
-                >
-                  {savingDaily ? "Speichere…" : "Beschreibung speichern"}
-                </button>
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploadingDaily}
-                  className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
-                >
-                  {uploadingDaily ? "Wird hochgeladen…" : "Bild ändern"}
-                </button>
-                <Link
-                  href={`/pair/${stats.dailyWord.pair}`}
-                  className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
-                >
-                  Details
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xl font-bold font-mono">{stats.dailyWord.pair}</span>
+                  <span className="text-lg text-blue-600 font-semibold">{stats.dailyWord.word}</span>
+                  <span className="text-green-600 text-sm font-semibold">✓ Erledigt</span>
+                </div>
+                {stats.dailyWord.description && (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{stats.dailyWord.description}</p>
+                )}
+                <Link href={`/pair/${stats.dailyWord.pair}`} className="text-xs text-blue-500 hover:underline mt-1 inline-block">
+                  Details ansehen
                 </Link>
               </div>
             </div>
-          </div>
+          ) : (
+            // Not yet filled in
+            <>
+              <p className="text-sm text-slate-500 mb-4">Beschreibe dieses Wort und füge ein Bild hinzu</p>
+              <div className="flex items-start gap-4">
+                {stats.dailyWord.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={stats.dailyWord.imageUrl}
+                    alt={stats.dailyWord.word}
+                    className="w-24 h-24 rounded-xl object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-24 h-24 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-xs text-center cursor-pointer hover:bg-slate-200 flex-shrink-0 whitespace-pre"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploadingDaily ? "…" : "Bild\nhochladen"}
+                  </div>
+                )}
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <span className="text-2xl font-bold font-mono">{stats.dailyWord.pair}</span>
+                    <span className="ml-3 text-xl text-blue-600 font-semibold">{stats.dailyWord.word}</span>
+                  </div>
+                  <textarea
+                    value={dailyDesc}
+                    onChange={(e) => setDailyDesc(e.target.value)}
+                    placeholder="Beschreibe das Wort (Aussehen, Geschichte, Eselsbrücke…)"
+                    rows={3}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={saveDailyDesc}
+                      disabled={savingDaily || !dailyDesc.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+                    >
+                      {savingDaily ? "Speichere…" : "Beschreibung speichern"}
+                    </button>
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      disabled={uploadingDaily}
+                      className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                    >
+                      {uploadingDaily ? "Wird hochgeladen…" : "Bild hochladen"}
+                    </button>
+                    <Link
+                      href={`/pair/${stats.dailyWord.pair}`}
+                      className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      Details
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <input
             ref={fileRef}
             type="file"

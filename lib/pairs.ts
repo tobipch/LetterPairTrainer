@@ -1,17 +1,11 @@
-// Display label for special letters
-export const PAIR_DISPLAY: Record<string, string> = {
-  Q: "Q (SCH)",
-  X: "X (CH)",
-};
+export const PAIR_DISPLAY: Record<string, string> = {};
 
 export function displayPair(pair: string): string {
-  const a = PAIR_DISPLAY[pair[0]] ?? pair[0];
-  const b = PAIR_DISPLAY[pair[1]] ?? pair[1];
-  return `${a}${b}`;
+  return pair;
 }
 
 export function displayLetter(letter: string): string {
-  return PAIR_DISPLAY[letter] ?? letter;
+  return letter;
 }
 
 // Letters used in the 21x21 matrix

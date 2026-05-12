@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import TrainSession from "@/components/train/TrainSession";
 
 type Mode = "daily_all" | "hard_only" | "custom";
 type Direction = "lp_to_word" | "word_to_lp" | "random";
 
-export default function TrainPage() {
+function TrainPageInner() {
+  const searchParams = useSearchParams();
+  const continueId = searchParams.get("continue");
+  const modeParam = searchParams.get("mode") as Mode | null;
+
   const [started, setStarted] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [mode, setMode] = useState<Mode>("daily_all");
+  const [mode, setMode] = useState<Mode>(modeParam ?? "daily_all");
   const [direction, setDirection] = useState<Direction>("lp_to_word");
   const [slowThresholdMs, setSlowThresholdMs] = useState(3000);
   const [loading, setLoading] = useState(false);
@@ -23,6 +28,22 @@ export default function TrainPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Auto-continue existing session
+  useEffect(() => {
+    if (!continueId) return;
+    fetch(`/api/sessions/${continueId}`)
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.id) {
+          setSessionId(s.id);
+          setMode(s.mode);
+          setDirection(s.directionSetting);
+          setStarted(true);
+        }
+      })
+      .catch(() => {});
+  }, [continueId]);
 
   async function start() {
     setLoading(true);
@@ -45,6 +66,15 @@ export default function TrainPage() {
         sessionId={sessionId}
         slowThresholdMs={slowThresholdMs}
       />
+    );
+  }
+
+  // Loading continuation
+  if (continueId && !started) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
     );
   }
 
@@ -110,5 +140,17 @@ export default function TrainPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function TrainPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    }>
+      <TrainPageInner />
+    </Suspense>
   );
 }
