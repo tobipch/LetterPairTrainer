@@ -17,6 +17,7 @@ interface OverviewStats {
   weekSuccessRate: number | null;
   avgDurationMs: number | null;
   activeSession: ActiveSession | null;
+  dailyAllDoneToday: boolean;
   dailyWord: {
     pair: string;
     word: string;
@@ -73,7 +74,7 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const progressPct = stats.totalCount > 0 ? (stats.todayDone / stats.totalCount) * 100 : 0;
-  const { activeSession } = stats;
+  const { activeSession, dailyAllDoneToday } = stats;
 
   return (
     <div className="space-y-6">
@@ -124,7 +125,11 @@ export default function DashboardPage() {
 
       {/* Action buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {activeSession ? (
+        {dailyAllDoneToday ? (
+          <div className="bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 font-semibold py-4 rounded-xl text-center text-lg cursor-not-allowed select-none">
+            Daily All ✓
+          </div>
+        ) : activeSession ? (
           <Link
             href={`/train?continue=${activeSession.id}`}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl text-center text-lg"

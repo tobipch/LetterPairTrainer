@@ -90,6 +90,11 @@ export async function GET() {
       ),
     });
 
+    // Completed daily session today
+    const dailyAllDoneToday = completedDailySessions.some(
+      (s) => s.endedAt! >= todayStart()
+    );
+
     // Daily word: stable per day via date hash, independent of description state
     let dailyWord = null;
     let dailyWordDone = false;
@@ -102,6 +107,7 @@ export async function GET() {
 
     return NextResponse.json({
       totalCount,
+      dailyAllDoneToday,
       todayDone,
       streak,
       weekSuccessRate,
