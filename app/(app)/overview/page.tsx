@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { displayPair } from "@/lib/pairs";
-import { interpolateColor } from "@/lib/difficulty";
+import { interpolateColor } from "@/lib/colors";
 
 
 interface PairWithStats {
