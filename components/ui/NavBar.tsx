@@ -9,6 +9,7 @@ const links = [
   { href: "/overview", label: "Übersicht" },
   { href: "/heatmap", label: "Heatmap" },
   { href: "/settings", label: "Einstellungen" },
+  { href: "/admin/import", label: "CSV Import" },
 ];
 
 export default function NavBar() {
