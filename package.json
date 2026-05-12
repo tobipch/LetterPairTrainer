@@ -20,7 +20,7 @@
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.38.3",
     "iron-session": "^8.0.4",
-    "next": "15.3.2",
+    "next": "15.3.8",
     "papaparse": "^5.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
