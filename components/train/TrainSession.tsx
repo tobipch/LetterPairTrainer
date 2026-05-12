@@ -17,21 +17,15 @@ interface Props {
   direction: "lp_to_word" | "word_to_lp" | "random";
   sessionId: number;
   slowThresholdMs: number;
-  customPairs?: string[];
 }
 
 type Phase = "thinking" | "rating" | "done";
 
-export default function TrainSession({
-  mode,
-  direction,
-  sessionId,
-  slowThresholdMs,
-  customPairs,
-}: Props) {
+export default function TrainSession({ mode, direction, sessionId, slowThresholdMs }: Props) {
   const [current, setCurrent] = useState<Pair | null>(null);
-  const [remaining, setRemaining] = useState<number>(0);
-  const [total, setTotal] = useState<number>(0);
+  const [prefetched, setPrefetched] = useState<{ pair: Pair; remaining: number; total: number } | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [total, setTotal] = useState(0);
   const [phase, setPhase] = useState<Phase>("thinking");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | null>(null);
@@ -39,55 +33,78 @@ export default function TrainSession({
   const [showConfusion, setShowConfusion] = useState(false);
   const [done, setDone] = useState(false);
   const [actualDirection, setActualDirection] = useState<"lp_to_word" | "word_to_lp">("lp_to_word");
-  const [donePairs, setDonePairs] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
+  // Refs to avoid stale closures in async functions
+  const donePairsRef = useRef<string[]>([]);
   const startRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hiddenRef = useRef(false);
+  const prefetchingRef = useRef(false);
 
   const resolveDirection = useCallback(
-    (d: "lp_to_word" | "word_to_lp" | "random"): "lp_to_word" | "word_to_lp" => {
-      if (d === "random") return Math.random() < 0.5 ? "lp_to_word" : "word_to_lp";
-      return d;
-    },
+    (d: "lp_to_word" | "word_to_lp" | "random"): "lp_to_word" | "word_to_lp" =>
+      d === "random" ? (Math.random() < 0.5 ? "lp_to_word" : "word_to_lp") : d,
     []
   );
 
-  const fetchNext = useCallback(async () => {
-    setLoading(true);
-    const excludeParam = donePairs.join(",");
+  const buildNextUrl = useCallback((extraExclude: string[] = []) => {
+    const exclude = [...donePairsRef.current, ...extraExclude];
     const params = new URLSearchParams({ mode });
-    if (excludeParam) params.set("exclude", excludeParam);
+    if (exclude.length) params.set("exclude", exclude.join(","));
     if (mode === "hard_only") params.set("limit", "50");
+    return `/api/sessions/next?${params}`;
+  }, [mode]);
 
-    const res = await fetch(`/api/sessions/next?${params}`);
-    const data = await res.json();
-
-    if (data.done || !data.pair) {
-      setDone(true);
-      setLoading(false);
-      return;
+  // Pre-fetch the next pair silently in the background
+  const prefetchNext = useCallback(async (extraExclude: string[] = []) => {
+    if (prefetchingRef.current) return;
+    prefetchingRef.current = true;
+    try {
+      const res = await fetch(buildNextUrl(extraExclude));
+      const data = await res.json();
+      if (data.done || !data.pair) {
+        setPrefetched(null);
+      } else {
+        setPrefetched({ pair: data.pair, remaining: data.remaining ?? 0, total: data.total ?? 0 });
+      }
+    } catch {
+      setPrefetched(null);
+    } finally {
+      prefetchingRef.current = false;
     }
+  }, [buildNextUrl]);
 
-    setCurrent(data.pair);
-    setRemaining(data.remaining ?? 0);
-    setTotal(data.total ?? 0);
-    setActualDirection(resolveDirection(direction));
-    setPhase("thinking");
-    setDiscarded(false);
-    setElapsedMs(0);
+  function startTimer() {
     startRef.current = performance.now();
-    setLoading(false);
-  }, [donePairs, mode, direction, resolveDirection]);
+    setElapsedMs(0);
+  }
 
-  // Initial load
+  // Initial load: fetch first pair, then immediately prefetch second
   useEffect(() => {
-    fetchNext();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function init() {
+      const res = await fetch(buildNextUrl());
+      const data = await res.json();
+      if (data.done || !data.pair) {
+        setDone(true);
+        setInitialLoading(false);
+        return;
+      }
+      setCurrent(data.pair);
+      setRemaining(data.remaining ?? 0);
+      setTotal(data.total ?? 0);
+      setActualDirection(resolveDirection(direction));
+      startTimer();
+      setInitialLoading(false);
+      // Immediately prefetch next
+      donePairsRef.current = [data.pair.pair];
+      prefetchNext([data.pair.pair]);
+    }
+    init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer
+  // Timer tick
   useEffect(() => {
     if (phase !== "thinking") {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -100,21 +117,16 @@ export default function TrainSession({
         startRef.current = performance.now() - elapsedMs;
       }
     }, 100);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   // Pause on tab hide
   useEffect(() => {
     function onVisibility() {
-      if (document.hidden) {
-        hiddenRef.current = true;
-      } else {
-        hiddenRef.current = false;
-        if (phase === "thinking") {
-          startRef.current = performance.now() - elapsedMs;
-        }
+      hiddenRef.current = document.hidden;
+      if (!document.hidden && phase === "thinking") {
+        startRef.current = performance.now() - elapsedMs;
       }
     }
     document.addEventListener("visibilitychange", onVisibility);
@@ -123,16 +135,15 @@ export default function TrainSession({
 
   function reveal() {
     if (phase !== "thinking") return;
-    const elapsed = performance.now() - startRef.current;
-    setDurationMs(Math.round(elapsed));
-    setElapsedMs(elapsed);
+    setDurationMs(Math.round(performance.now() - startRef.current));
     setPhase("rating");
   }
 
-  async function submitReview(
+  // Advance instantly to prefetched pair, fire review POST in background
+  const submitReview = useCallback(async (
     result: "instant" | "slow" | "fail",
     confusion?: ConfusionResult
-  ) {
+  ) => {
     if (!current) return;
 
     const body: Record<string, unknown> = {
@@ -143,22 +154,56 @@ export default function TrainSession({
       durationDiscarded: discarded,
       sessionId,
     };
-
     if (confusion && confusion.type !== "skip") {
       body.confusionType = confusion.type;
       if (confusion.type === "other_pair") body.confusedWithPair = confusion.pair;
       if (confusion.type === "wrong_word") body.confusedWithText = confusion.text;
     }
 
-    await fetch("/api/reviews", {
+    // Fire review POST in background — do NOT await
+    fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+    }).catch(() => {});
 
-    setDonePairs((prev) => [...prev, current.pair]);
-    fetchNext();
-  }
+    // Mark current as done
+    donePairsRef.current = [...donePairsRef.current, current.pair];
+
+    // Instantly advance to pre-fetched pair
+    if (prefetched) {
+      const next = prefetched;
+      setCurrent(next.pair);
+      setRemaining(next.remaining);
+      setTotal(next.total);
+      setActualDirection(resolveDirection(direction));
+      setPhase("thinking");
+      setDiscarded(false);
+      setDurationMs(null);
+      setPrefetched(null);
+      startTimer();
+      // Pre-fetch the one after
+      prefetchNext([next.pair.pair]);
+    } else {
+      // Fallback: nothing prefetched yet — fetch on demand
+      const res = await fetch(buildNextUrl());
+      const data = await res.json();
+      if (data.done || !data.pair) {
+        setDone(true);
+      } else {
+        setCurrent(data.pair);
+        setRemaining(data.remaining ?? 0);
+        setTotal(data.total ?? 0);
+        setActualDirection(resolveDirection(direction));
+        setPhase("thinking");
+        setDiscarded(false);
+        setDurationMs(null);
+        startTimer();
+        donePairsRef.current = [...donePairsRef.current, data.pair.pair];
+        prefetchNext([data.pair.pair]);
+      }
+    }
+  }, [current, actualDirection, discarded, durationMs, sessionId, prefetched, direction, resolveDirection, prefetchNext, buildNextUrl]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -166,13 +211,9 @@ export default function TrainSession({
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-
-      if (phase === "thinking" && (e.key === " " || e.key === "Enter")) {
-        e.preventDefault();
-        reveal();
-      }
+      if (phase === "thinking" && (e.key === " " || e.key === "Enter")) { e.preventDefault(); reveal(); }
       if (phase === "rating") {
-        if (e.key === "1") { e.preventDefault(); submitReview("instant"); }
+        if (e.key === "1" || e.key === "Enter") { e.preventDefault(); submitReview("instant"); }
         if (e.key === "2") { e.preventDefault(); submitReview("slow"); }
         if (e.key === "3") { e.preventDefault(); setShowConfusion(true); }
         if (e.key === "d" || e.key === "D") { e.preventDefault(); setDiscarded((v) => !v); }
@@ -180,14 +221,14 @@ export default function TrainSession({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, showConfusion, durationMs, discarded, current]);
+  }, [phase, showConfusion, submitReview]);
 
   async function endSession() {
     await fetch(`/api/sessions/${sessionId}`, { method: "PATCH" });
     window.location.href = "/dashboard";
   }
 
-  if (loading && !current) {
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -200,7 +241,7 @@ export default function TrainSession({
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="text-4xl">🎉</div>
         <h2 className="text-2xl font-bold">Session abgeschlossen!</h2>
-        <p className="text-slate-500">{donePairs.length} Pairs trainiert</p>
+        <p className="text-slate-500">{donePairsRef.current.length} Pairs trainiert</p>
         <button
           onClick={endSession}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl"
@@ -230,12 +271,9 @@ export default function TrainSession({
           {mode === "daily_all" ? "Daily All" : mode === "hard_only" ? "Hard Only" : "Custom"}
           {" "}· {actualDirection === "lp_to_word" ? "LP → Wort" : "Wort → LP"}
         </span>
-        <span>
-          {total > 0 ? `${total - remaining + 1} / ${total}` : ""}
-        </span>
+        <span>{total > 0 ? `${total - remaining + 1} / ${total}` : ""}</span>
       </div>
 
-      {/* Progress bar */}
       {total > 0 && (
         <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
           <div
@@ -255,33 +293,21 @@ export default function TrainSession({
                   {actualDirection === "lp_to_word" ? "Was ist das Wort für…" : "Welches Letterpair gehört zu…"}
                 </p>
                 <div className="text-5xl font-bold tracking-wider">
-                  {actualDirection === "lp_to_word"
-                    ? displayPair(current.pair)
-                    : current.word}
+                  {actualDirection === "lp_to_word" ? displayPair(current.pair) : current.word}
                 </div>
               </>
             ) : (
               <>
-                <p className="text-xs uppercase tracking-widest text-slate-400 mb-2">
-                  {actualDirection === "lp_to_word" ? "Auflösung" : "Pair"}
-                </p>
+                <p className="text-xs uppercase tracking-widest text-slate-400 mb-2">Auflösung</p>
                 <div className="text-5xl font-bold tracking-wider">
-                  {actualDirection === "lp_to_word"
-                    ? displayPair(current.pair)
-                    : current.word}
+                  {actualDirection === "lp_to_word" ? displayPair(current.pair) : current.word}
                 </div>
                 <div className="text-2xl text-blue-600 font-semibold">
-                  {actualDirection === "lp_to_word"
-                    ? current.word
-                    : displayPair(current.pair)}
+                  {actualDirection === "lp_to_word" ? current.word : displayPair(current.pair)}
                 </div>
                 {current.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={current.imageUrl}
-                    alt={current.word}
-                    className="max-h-32 rounded-lg object-contain"
-                  />
+                  <img src={current.imageUrl} alt={current.word} className="max-h-32 rounded-lg object-contain" />
                 )}
                 {current.description && (
                   <p className="text-sm text-slate-500 max-w-xs">{current.description}</p>
@@ -293,7 +319,7 @@ export default function TrainSession({
       </div>
 
       {/* Timer */}
-      <div className={`text-sm font-mono ${phase === "rating" && discarded ? "line-through text-slate-400" : "text-slate-400"}`}>
+      <div className={`text-sm font-mono ${discarded ? "line-through text-slate-400" : "text-slate-400"}`}>
         {`${((phase === "thinking" ? elapsedMs : (durationMs ?? 0)) / 1000).toFixed(1)}s`}
       </div>
 
@@ -344,10 +370,7 @@ export default function TrainSession({
         </div>
       )}
 
-      <button
-        onClick={endSession}
-        className="text-xs text-slate-400 hover:text-slate-600 mt-4"
-      >
+      <button onClick={endSession} className="text-xs text-slate-400 hover:text-slate-600 mt-4">
         Session beenden
       </button>
     </div>
