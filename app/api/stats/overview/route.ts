@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { reviews, letterpairs, trainSessions } from "@/db/schema";
-import { eq, and, gte, isNull, desc } from "drizzle-orm";
+import { eq, and, gte, isNull, isNotNull, desc } from "drizzle-orm";
 import { requireAuth } from "@/lib/session";
 import { computeAllPairStats } from "@/lib/difficulty";
 
@@ -27,13 +27,20 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
 
-    const [allReviews, totalPairs] = await Promise.all([
+    const [allReviews, totalPairs, completedDailySessions] = await Promise.all([
       db.query.reviews.findMany({
         where: eq(reviews.userId, userId),
         orderBy: [desc(reviews.createdAt)],
       }),
       db.query.letterpairs.findMany({
         orderBy: (lp, { asc }) => [asc(lp.pair)],
+      }),
+      db.query.trainSessions.findMany({
+        where: and(
+          eq(trainSessions.userId, userId),
+          eq(trainSessions.mode, "daily_all"),
+          isNotNull(trainSessions.endedAt)
+        ),
       }),
     ]);
 
@@ -43,7 +50,7 @@ export async function GET() {
     const todayReviews = allReviews.filter((r) => r.createdAt >= todayStart());
     const todayDone = new Set(todayReviews.map((r) => r.pair)).size;
 
-    // Streak
+    // Streak: only days with a completed Daily All session
     let streak = 0;
     const checkDate = new Date();
     checkDate.setHours(0, 0, 0, 0);
@@ -51,10 +58,10 @@ export async function GET() {
       const dayStart = new Date(checkDate);
       const dayEnd = new Date(checkDate);
       dayEnd.setDate(dayEnd.getDate() + 1);
-      const hasReview = allReviews.some(
-        (r) => r.createdAt >= dayStart && r.createdAt < dayEnd
+      const completed = completedDailySessions.some(
+        (s) => s.endedAt! >= dayStart && s.endedAt! < dayEnd
       );
-      if (!hasReview) break;
+      if (!completed) break;
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     }
