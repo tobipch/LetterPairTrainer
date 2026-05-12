@@ -227,13 +227,6 @@ export default function PairDetailPage() {
           </div>
         )}
       </div>
-
-      <a
-        href={`/train?pairs=${data.pair}`}
-        className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-center"
-      >
-        Dieses Pair trainieren
-      </a>
     </div>
   );
 }
