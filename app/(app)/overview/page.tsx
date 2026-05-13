@@ -129,7 +129,7 @@ export default function OverviewPage() {
               <SortHeader label="Wort" k="word" />
               <SortHeader label="Reviews" k="total" />
               <SortHeader label="Sofort%" k="instantRate" />
-              <SortHeader label="Langsam%" k="slowRate" />
+              <SortHeader label="Unsicher%" k="slowRate" />
               <SortHeader label="Fail%" k="failRate" />
               <SortHeader label="Ø Zeit" k="avgDurationMs" />
               <SortHeader label="Letzte Review" k="lastReviewAt" />
@@ -173,7 +173,7 @@ export default function OverviewPage() {
                   <td className="px-3 py-2 text-center text-green-600">
                     {p.stats.total > 0 ? `${(p.stats.instantRate * 100).toFixed(0)}%` : "—"}
                   </td>
-                  <td className="px-3 py-2 text-center text-yellow-600">
+                  <td className="px-3 py-2 text-center text-yellow-600" title="Unsicher">
                     {p.stats.total > 0 ? `${(p.stats.slowRate * 100).toFixed(0)}%` : "—"}
                   </td>
                   <td className="px-3 py-2 text-center text-red-600">

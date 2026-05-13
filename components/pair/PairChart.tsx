@@ -78,7 +78,7 @@ export default function PairChart({ reviews }: Props) {
               dataKey="y"
               domain={[-0.5, 2.5]}
               ticks={[0, 1, 2]}
-              tickFormatter={(v) => ["Fail", "Slow", "Sofort"][v] ?? ""}
+              tickFormatter={(v) => ["Fail", "Unsicher", "Sofort"][v] ?? ""}
               tick={{ fontSize: 9 }}
               width={45}
             />

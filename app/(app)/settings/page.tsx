@@ -107,7 +107,7 @@ export default function SettingsPage() {
             <span>10s</span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Ab dieser Zeit wird der "Langsam"-Button hervorgehoben
+            Ab dieser Zeit wird der "Unsicher"-Button hervorgehoben
           </p>
         </div>
 

@@ -329,32 +329,32 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
           onClick={reveal}
           className="bg-slate-800 dark:bg-slate-600 hover:bg-slate-700 text-white font-semibold px-8 py-4 rounded-2xl text-lg shadow-md active:scale-95"
         >
-          Auflösen <span className="text-xs font-mono text-slate-400 ml-2">[Space]</span>
+          Auflösen <span className="text-xs font-mono text-slate-400 ml-2 hidden sm:inline">[Space]</span>
         </button>
       ) : (
         <div className="flex flex-col items-center gap-3 w-full max-w-lg">
-          <div className="flex gap-3 w-full">
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
             <button
               onClick={() => submitReview("instant")}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-4 rounded-xl text-lg active:scale-95"
+              className="flex-1 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95"
             >
-              Sofort <span className="text-xs font-mono opacity-70">[1]</span>
+              Sofort <span className="text-xs font-mono opacity-70 hidden sm:inline">[1]</span>
             </button>
             <button
               onClick={() => submitReview("slow")}
-              className={`flex-1 font-semibold py-4 rounded-xl text-lg active:scale-95 ${
+              className={`flex-1 font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95 ${
                 isSlowHint
                   ? "bg-yellow-400 hover:bg-yellow-500 text-slate-900 ring-2 ring-yellow-300"
-                  : "bg-yellow-400 hover:bg-yellow-500 text-slate-900"
+                  : "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-slate-900"
               }`}
             >
-              Langsam <span className="text-xs font-mono opacity-70">[2]</span>
+              Unsicher <span className="text-xs font-mono opacity-70 hidden sm:inline">[2]</span>
             </button>
             <button
               onClick={() => setShowConfusion(true)}
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-4 rounded-xl text-lg active:scale-95"
+              className="flex-1 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95"
             >
-              Fail <span className="text-xs font-mono opacity-70">[3]</span>
+              Fail <span className="text-xs font-mono opacity-70 hidden sm:inline">[3]</span>
             </button>
           </div>
           <button
@@ -365,7 +365,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
                 : "border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700"
             }`}
           >
-            Zeit verwerfen <span className="text-xs font-mono opacity-70">[D]</span>
+            Zeit verwerfen <span className="text-xs font-mono opacity-70 hidden sm:inline">[D]</span>
           </button>
         </div>
       )}

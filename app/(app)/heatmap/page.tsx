@@ -117,7 +117,7 @@ export default function HeatmapPage() {
             <>
               <div className="text-slate-500 mt-1">Reviews: {tooltip.pair.stats.total}</div>
               <div className="text-green-600">Sofort: {(tooltip.pair.stats.instantRate * 100).toFixed(0)}%</div>
-              <div className="text-yellow-600">Langsam: {(tooltip.pair.stats.slowRate * 100).toFixed(0)}%</div>
+              <div className="text-yellow-600">Unsicher: {(tooltip.pair.stats.slowRate * 100).toFixed(0)}%</div>
               <div className="text-red-600">Fail: {(tooltip.pair.stats.failRate * 100).toFixed(0)}%</div>
               {tooltip.pair.stats.avgDurationMs && (
                 <div className="text-slate-500">Ø {(tooltip.pair.stats.avgDurationMs / 1000).toFixed(1)}s</div>

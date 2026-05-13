@@ -197,7 +197,7 @@ export default function PairDetailPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <Stat label="Reviews" value={totalReviews} />
           <Stat label="Sofort" value={`${instantCount} (${totalReviews > 0 ? ((instantCount / totalReviews) * 100).toFixed(0) : 0}%)`} color="text-green-600" />
-          <Stat label="Langsam" value={`${slowCount} (${totalReviews > 0 ? ((slowCount / totalReviews) * 100).toFixed(0) : 0}%)`} color="text-yellow-600" />
+          <Stat label="Unsicher" value={`${slowCount} (${totalReviews > 0 ? ((slowCount / totalReviews) * 100).toFixed(0) : 0}%)`} color="text-yellow-600" />
           <Stat label="Fail" value={`${failCount} (${totalReviews > 0 ? ((failCount / totalReviews) * 100).toFixed(0) : 0}%)`} color="text-red-600" />
           <Stat label="Ø Zeit" value={avgMs != null ? `${(avgMs / 1000).toFixed(2)}s` : "—"} />
           <Stat label="Median Zeit" value={medianMs != null ? `${(medianMs / 1000).toFixed(2)}s` : "—"} />
