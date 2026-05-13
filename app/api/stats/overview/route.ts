@@ -95,14 +95,17 @@ export async function GET() {
       (s) => s.endedAt! >= todayStart()
     );
 
-    // Daily word: stable per day via date hash, independent of description state
+    // Daily word: prefer pairs with no description AND no image, then no description only, then any
+    // Stable per day via date hash within the chosen candidate pool
     let dailyWord = null;
     let dailyWordDone = false;
     if (totalPairs.length > 0) {
-      const idx = dateHash() % totalPairs.length;
-      const picked = totalPairs[idx];
-      dailyWord = picked;
-      dailyWordDone = !!picked.description;
+      const noDescNoImg = totalPairs.filter((p) => !p.description && !p.imageUrl);
+      const noDesc = totalPairs.filter((p) => !p.description);
+      const pool = noDescNoImg.length > 0 ? noDescNoImg : noDesc.length > 0 ? noDesc : totalPairs;
+      const idx = dateHash() % pool.length;
+      dailyWord = pool[idx];
+      dailyWordDone = !!dailyWord.description;
     }
 
     return NextResponse.json({
