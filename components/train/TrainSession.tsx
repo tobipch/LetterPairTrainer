@@ -34,6 +34,15 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   const [done, setDone] = useState(false);
   const [actualDirection, setActualDirection] = useState<"lp_to_word" | "word_to_lp">("lp_to_word");
   const [initialLoading, setInitialLoading] = useState(true);
+  const [undoAvailable, setUndoAvailable] = useState(false);
+  const [pastWrongWords, setPastWrongWords] = useState<string[]>([]);
+
+  // Stores the previous pair so Ctrl+Z can restore it to rating phase
+  const lastRatedRef = useRef<{
+    pair: Pair;
+    durationMs: number | null;
+    direction: "lp_to_word" | "word_to_lp";
+  } | null>(null);
 
   // Refs to avoid stale closures in async functions
   const donePairsRef = useRef<string[]>([]);
@@ -75,6 +84,22 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     }
   }, [buildNextUrl]);
 
+  async function fetchPastWrongWords(pair: string) {
+    try {
+      const res = await fetch(`/api/letterpairs/${pair}`);
+      const data = await res.json();
+      const words = (data.history ?? [])
+        .filter((r: { confusionType: string; confusedWithText: string | null }) =>
+          r.confusionType === "wrong_word" && r.confusedWithText
+        )
+        .map((r: { confusedWithText: string }) => r.confusedWithText as string)
+        .reverse();
+      setPastWrongWords(words);
+    } catch {
+      setPastWrongWords([]);
+    }
+  }
+
   function startTimer() {
     startRef.current = performance.now();
     setElapsedMs(0);
@@ -99,6 +124,8 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       // Immediately prefetch next
       donePairsRef.current = [data.pair.pair];
       prefetchNext([data.pair.pair]);
+      // Load past wrong words for this pair
+      fetchPastWrongWords(data.pair.pair);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,6 +187,10 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       if (confusion.type === "wrong_word") body.confusedWithText = confusion.text;
     }
 
+    // Save for potential undo before advancing
+    lastRatedRef.current = { pair: current, durationMs, direction: actualDirection };
+    setUndoAvailable(true);
+
     // Fire review POST in background — do NOT await
     fetch("/api/reviews", {
       method: "POST",
@@ -182,8 +213,8 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       setDurationMs(null);
       setPrefetched(null);
       startTimer();
-      // Pre-fetch the one after
       prefetchNext([next.pair.pair]);
+      fetchPastWrongWords(next.pair.pair);
     } else {
       // Fallback: nothing prefetched yet — fetch on demand
       const res = await fetch(buildNextUrl());
@@ -205,12 +236,34 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     }
   }, [current, actualDirection, discarded, durationMs, sessionId, prefetched, direction, resolveDirection, prefetchNext, buildNextUrl]);
 
+  // Undo last rating (Ctrl+Z)
+  const undoLastRating = useCallback(async () => {
+    const last = lastRatedRef.current;
+    if (!last || !undoAvailable) return;
+
+    // Delete from DB in background
+    fetch(`/api/reviews/last?pair=${last.pair.pair}`, { method: "DELETE" }).catch(() => {});
+
+    // Remove from done list
+    donePairsRef.current = donePairsRef.current.filter((p) => p !== last.pair.pair);
+
+    // Restore as current in rating phase (answer already visible)
+    setCurrent(last.pair);
+    setDurationMs(last.durationMs);
+    setActualDirection(last.direction);
+    setPhase("rating");
+    setDiscarded(false);
+    setUndoAvailable(false);
+    lastRatedRef.current = null;
+  }, [undoAvailable]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (showConfusion) return;
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undoLastRating(); return; }
       if (phase === "thinking" && (e.key === " " || e.key === "Enter")) { e.preventDefault(); reveal(); }
       if (phase === "rating") {
         if (e.key === "1" || e.key === "Enter") { e.preventDefault(); submitReview("instant"); }
@@ -221,7 +274,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, showConfusion, submitReview]);
+  }, [phase, showConfusion, submitReview, undoLastRating]);
 
   async function endSession() {
     await fetch(`/api/sessions/${sessionId}`, { method: "PATCH" });
@@ -258,6 +311,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     <div className="flex flex-col items-center gap-6 py-8">
       {showConfusion && (
         <ConfusionDialog
+          pastWrongWords={pastWrongWords}
           onDone={(result) => {
             setShowConfusion(false);
             submitReview("fail", result);
@@ -370,9 +424,19 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
         </div>
       )}
 
-      <button onClick={endSession} className="text-xs text-slate-400 hover:text-slate-600 mt-4">
-        Session beenden
-      </button>
+      <div className="flex items-center gap-4 mt-2">
+        {undoAvailable && (
+          <button
+            onClick={undoLastRating}
+            className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+          >
+            ↩ Rückgängig <span className="hidden sm:inline opacity-60">[Ctrl+Z]</span>
+          </button>
+        )}
+        <button onClick={endSession} className="text-xs text-slate-400 hover:text-slate-600">
+          Session beenden
+        </button>
+      </div>
     </div>
   );
 }
