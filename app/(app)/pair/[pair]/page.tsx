@@ -139,7 +139,29 @@ export default function PairDetailPage() {
           <div className="p-4 flex flex-col items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={data.imageUrl} alt={data.word} className="max-h-48 rounded-xl object-contain w-full" />
-            <span className="text-xs text-slate-400">{uploading ? "Wird hochgeladen…" : "Klicken zum Ändern"}</span>
+            <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => !uploading && fileInputRef.current?.click()}
+                disabled={uploading}
+                className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
+              >
+                {uploading ? "Wird hochgeladen…" : "Ersetzen"}
+              </button>
+              <span className="text-slate-200 dark:text-slate-600">|</span>
+              <button
+                onClick={async () => {
+                  await fetch(`/api/letterpairs/${pair}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ imageUrl: null }),
+                  });
+                  await load();
+                }}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                Entfernen
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-400">
