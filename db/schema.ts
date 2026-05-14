@@ -78,6 +78,8 @@ export const settings = pgTable("settings", {
     .default("lp_to_word")
     .notNull(),
   slowThresholdMs: integer("slow_threshold_ms").default(3000).notNull(),
+  dailyWordPair: varchar("daily_word_pair", { length: 4 }),
+  dailyWordDate: varchar("daily_word_date", { length: 10 }), // YYYY-MM-DD
 });
 
 export type User = typeof users.$inferSelect;

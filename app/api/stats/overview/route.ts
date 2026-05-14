@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { reviews, letterpairs, trainSessions } from "@/db/schema";
+import { reviews, letterpairs, trainSessions, settings } from "@/db/schema";
 import { eq, and, gte, isNull, isNotNull, desc } from "drizzle-orm";
 import { requireAuth } from "@/lib/session";
 import { computeAllPairStats } from "@/lib/difficulty";
@@ -16,6 +16,11 @@ function todayStart(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function todayString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function dateHash(): number {
@@ -95,17 +100,37 @@ export async function GET() {
       (s) => s.endedAt! >= todayStart()
     );
 
-    // Daily word: prefer pairs with no description AND no image, then no description only, then any
-    // Stable per day via date hash within the chosen candidate pool
+    // Daily word: stable per calendar day, stored in settings
     let dailyWord = null;
     let dailyWordDone = false;
     if (totalPairs.length > 0) {
-      const noDescNoImg = totalPairs.filter((p) => !p.description && !p.imageUrl);
-      const noDesc = totalPairs.filter((p) => !p.description);
-      const pool = noDescNoImg.length > 0 ? noDescNoImg : noDesc.length > 0 ? noDesc : totalPairs;
-      const idx = dateHash() % pool.length;
-      dailyWord = pool[idx];
-      dailyWordDone = !!dailyWord.description;
+      const today = todayString();
+      let userSettings = await db.query.settings.findFirst({
+        where: eq(settings.userId, userId),
+      });
+
+      // If already assigned today, use stored pair
+      if (userSettings?.dailyWordDate === today && userSettings.dailyWordPair) {
+        dailyWord = totalPairs.find((p) => p.pair === userSettings!.dailyWordPair) ?? null;
+      } else {
+        // Pick a new one: prefer no description + no image, then no description, then any
+        const noDescNoImg = totalPairs.filter((p) => !p.description && !p.imageUrl);
+        const noDesc = totalPairs.filter((p) => !p.description);
+        const pool = noDescNoImg.length > 0 ? noDescNoImg : noDesc.length > 0 ? noDesc : totalPairs;
+        const idx = dateHash() % pool.length;
+        dailyWord = pool[idx];
+
+        // Persist the choice
+        await db
+          .insert(settings)
+          .values({ userId, dailyWordPair: dailyWord.pair, dailyWordDate: today })
+          .onConflictDoUpdate({
+            target: settings.userId,
+            set: { dailyWordPair: dailyWord.pair, dailyWordDate: today },
+          });
+      }
+
+      dailyWordDone = !!dailyWord?.description;
     }
 
     return NextResponse.json({
