@@ -27,6 +27,15 @@ export default function ConfusionDialog({ onDone, pastWrongWords = [] }: Props) 
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // When "wrong word" is selected and suggestions exist, number keys pick chips
+      if (selected === "wrong_word" && suggestions.length > 0) {
+        const n = parseInt(e.key);
+        if (!isNaN(n) && n >= 1 && n <= suggestions.length) {
+          e.preventDefault();
+          setTextInput(suggestions[n - 1]);
+          return;
+        }
+      }
       if (e.key === "1") { e.preventDefault(); setSelected("none"); }
       if (e.key === "2") { e.preventDefault(); setSelected("other_pair"); }
       if (e.key === "3") { e.preventDefault(); setSelected("wrong_word"); }
