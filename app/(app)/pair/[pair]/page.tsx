@@ -243,9 +243,18 @@ export default function PairDetailPage() {
           <div className="mt-3">
             <h3 className="text-sm font-medium text-slate-500 mb-1">Falsche Wörter:</h3>
             <div className="flex flex-wrap gap-2">
-              {[...new Set(confusionTextItems)].slice(0, 8).map((t) => (
-                <span key={t} className="bg-slate-100 dark:bg-slate-700 text-slate-600 text-xs px-2 py-1 rounded-full">{t}</span>
-              ))}
+              {(() => {
+                const counts = new Map<string, number>();
+                for (const t of confusionTextItems) counts.set(t, (counts.get(t) ?? 0) + 1);
+                return [...counts.entries()]
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 8)
+                  .map(([t, count]) => (
+                    <span key={t} className="bg-slate-100 dark:bg-slate-700 text-slate-600 text-xs px-2 py-1 rounded-full">
+                      {t} <span className="opacity-60">{totalReviews > 0 ? Math.round((count / totalReviews) * 100) : 0}%</span>
+                    </span>
+                  ));
+              })()}
             </div>
           </div>
         )}
