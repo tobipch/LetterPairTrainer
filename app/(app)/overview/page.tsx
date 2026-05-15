@@ -127,6 +127,7 @@ export default function OverviewPage() {
             <tr>
               <SortHeader label="Pair" k="pair" />
               <SortHeader label="Wort" k="word" />
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap" title="Beschreibung / Bild">Info</th>
               <SortHeader label="Reviews" k="total" />
               <SortHeader label="Sofort%" k="instantRate" />
               <SortHeader label="Unsicher%" k="slowRate" />
@@ -168,6 +169,12 @@ export default function OverviewPage() {
                     ) : (
                       <span title="Doppelklick zum Bearbeiten">{p.word}</span>
                     )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1.5 items-center">
+                      <span title={p.description ? "Hat Beschreibung" : "Keine Beschreibung"} className={`text-sm ${p.description ? "opacity-100" : "opacity-20"}`}>📝</span>
+                      <span title={p.imageUrl ? "Hat Bild" : "Kein Bild"} className={`text-sm ${p.imageUrl ? "opacity-100" : "opacity-20"}`}>🖼</span>
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-center">{p.stats.total}</td>
                   <td className="px-3 py-2 text-center text-green-600">

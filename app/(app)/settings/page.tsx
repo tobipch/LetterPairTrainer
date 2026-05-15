@@ -5,12 +5,14 @@ import { useState, useEffect } from "react";
 interface Settings {
   directionDefault: "lp_to_word" | "word_to_lp" | "random";
   slowThresholdMs: number;
+  hardOnlyCount: number;
 }
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     directionDefault: "lp_to_word",
     slowThresholdMs: 3000,
+    hardOnlyCount: 50,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +38,7 @@ export default function SettingsPage() {
       body: JSON.stringify({
         directionDefault: settings.directionDefault,
         slowThresholdMs: settings.slowThresholdMs,
+        hardOnlyCount: settings.hardOnlyCount,
       }),
     });
     setSaving(false);
@@ -108,6 +111,28 @@ export default function SettingsPage() {
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Ab dieser Zeit wird der "Unsicher"-Button hervorgehoben
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Hard Only Pairs: <span className="text-blue-600">{settings.hardOnlyCount}</span>
+          </label>
+          <input
+            type="range"
+            min={5}
+            max={300}
+            step={5}
+            value={settings.hardOnlyCount}
+            onChange={(e) => setSettings((s) => ({ ...s, hardOnlyCount: parseInt(e.target.value) }))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-slate-400 mt-1">
+            <span>5</span>
+            <span>300</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Anzahl der schwierigsten Pairs im Hard-Only-Modus
           </p>
         </div>
 

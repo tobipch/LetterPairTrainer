@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import ConfusionDialog, { ConfusionResult } from "./ConfusionDialog";
 import { displayPair } from "@/lib/pairs";
 
@@ -12,16 +13,24 @@ interface Pair {
   imageUrl?: string | null;
 }
 
+interface SessionResult {
+  pair: Pair;
+  result: "instant" | "slow" | "fail";
+  durationMs: number | null;
+  discarded: boolean;
+}
+
 interface Props {
   mode: "daily_all" | "hard_only" | "custom";
   direction: "lp_to_word" | "word_to_lp" | "random";
   sessionId: number;
   slowThresholdMs: number;
+  hardOnlyCount?: number;
 }
 
 type Phase = "thinking" | "rating" | "done";
 
-export default function TrainSession({ mode, direction, sessionId, slowThresholdMs }: Props) {
+export default function TrainSession({ mode, direction, sessionId, slowThresholdMs, hardOnlyCount = 50 }: Props) {
   const [current, setCurrent] = useState<Pair | null>(null);
   const [prefetched, setPrefetched] = useState<{ pair: Pair; remaining: number; total: number } | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -38,14 +47,19 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   const [pastWrongWords, setPastWrongWords] = useState<string[]>([]);
   const [descOpen, setDescOpen] = useState(false);
 
-  // Stores the previous pair so Ctrl+Z can restore it to rating phase
+  // Re-drill state
+  const [activeSessionId, setActiveSessionId] = useState(sessionId);
+  const localPairPoolRef = useRef<Pair[] | null>(null);
+
+  // Session result tracking for summary
+  const sessionResultsRef = useRef<SessionResult[]>([]);
+
   const lastRatedRef = useRef<{
     pair: Pair;
     durationMs: number | null;
     direction: "lp_to_word" | "word_to_lp";
   } | null>(null);
 
-  // Refs to avoid stale closures in async functions
   const donePairsRef = useRef<string[]>([]);
   const startRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,15 +76,27 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     const exclude = [...donePairsRef.current, ...extraExclude];
     const params = new URLSearchParams({ mode });
     if (exclude.length) params.set("exclude", exclude.join(","));
-    if (mode === "hard_only") params.set("limit", "50");
+    if (mode === "hard_only") params.set("limit", String(hardOnlyCount));
     return `/api/sessions/next?${params}`;
-  }, [mode]);
+  }, [mode, hardOnlyCount]);
 
-  // Pre-fetch the next pair silently in the background
   const prefetchNext = useCallback(async (extraExclude: string[] = []) => {
     if (prefetchingRef.current) return;
     prefetchingRef.current = true;
     try {
+      // Local pool for re-drill mode
+      const pool = localPairPoolRef.current;
+      if (pool !== null) {
+        const exclude = [...donePairsRef.current, ...extraExclude];
+        const available = pool.filter((p) => !exclude.includes(p.pair));
+        if (!available.length) {
+          setPrefetched(null);
+        } else {
+          const next = available[Math.floor(Math.random() * available.length)];
+          setPrefetched({ pair: next, remaining: available.length, total: pool.length });
+        }
+        return;
+      }
       const res = await fetch(buildNextUrl(extraExclude));
       const data = await res.json();
       if (data.done || !data.pair) {
@@ -106,7 +132,21 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     setElapsedMs(0);
   }
 
-  // Initial load: fetch first pair, then immediately prefetch second
+  function initWithPair(pair: Pair, rem: number, tot: number) {
+    setCurrent(pair);
+    setRemaining(rem);
+    setTotal(tot);
+    setActualDirection(resolveDirection(direction));
+    setPhase("thinking");
+    setDiscarded(false);
+    setDurationMs(null);
+    setDescOpen(false);
+    startTimer();
+    donePairsRef.current = [pair.pair];
+    prefetchNext([pair.pair]);
+    fetchPastWrongWords(pair.pair);
+  }
+
   useEffect(() => {
     async function init() {
       const res = await fetch(buildNextUrl());
@@ -116,23 +156,13 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
         setInitialLoading(false);
         return;
       }
-      setCurrent(data.pair);
-      setRemaining(data.remaining ?? 0);
-      setTotal(data.total ?? 0);
-      setActualDirection(resolveDirection(direction));
-      startTimer();
+      initWithPair(data.pair, data.remaining ?? 0, data.total ?? 0);
       setInitialLoading(false);
-      // Immediately prefetch next
-      donePairsRef.current = [data.pair.pair];
-      prefetchNext([data.pair.pair]);
-      // Load past wrong words for this pair
-      fetchPastWrongWords(data.pair.pair);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer tick
   useEffect(() => {
     if (phase !== "thinking") {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -149,7 +179,6 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Pause on tab hide
   useEffect(() => {
     function onVisibility() {
       hiddenRef.current = document.hidden;
@@ -167,20 +196,20 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     setPhase("rating");
   }
 
-  // Advance instantly to prefetched pair, fire review POST in background
   const submitReview = useCallback(async (
     result: "instant" | "slow" | "fail",
     confusion?: ConfusionResult
   ) => {
     if (!current) return;
 
+    const dur = discarded ? undefined : durationMs;
     const body: Record<string, unknown> = {
       pair: current.pair,
       direction: actualDirection,
       result,
-      durationMs: discarded ? undefined : durationMs,
+      durationMs: dur,
       durationDiscarded: discarded,
-      sessionId,
+      sessionId: activeSessionId,
     };
     if (confusion && confusion.type !== "skip") {
       body.confusionType = confusion.type;
@@ -188,21 +217,20 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       if (confusion.type === "wrong_word") body.confusedWithText = confusion.text;
     }
 
-    // Save for potential undo before advancing
+    // Track for session summary
+    sessionResultsRef.current.push({ pair: current, result, durationMs: dur ?? null, discarded });
+
     lastRatedRef.current = { pair: current, durationMs, direction: actualDirection };
     setUndoAvailable(true);
 
-    // Fire review POST in background — do NOT await
     fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).catch(() => {});
 
-    // Mark current as done
     donePairsRef.current = [...donePairsRef.current, current.pair];
 
-    // Instantly advance to pre-fetched pair
     if (prefetched) {
       const next = prefetched;
       setCurrent(next.pair);
@@ -218,7 +246,30 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       prefetchNext([next.pair.pair]);
       fetchPastWrongWords(next.pair.pair);
     } else {
-      // Fallback: nothing prefetched yet — fetch on demand
+      // Check local pool first
+      const pool = localPairPoolRef.current;
+      if (pool !== null) {
+        const available = pool.filter((p) => !donePairsRef.current.includes(p.pair));
+        if (!available.length) {
+          setDone(true);
+        } else {
+          const next = available[Math.floor(Math.random() * available.length)];
+          setCurrent(next);
+          setRemaining(available.length - 1);
+          setTotal(pool.length);
+          setActualDirection(resolveDirection(direction));
+          setPhase("thinking");
+          setDiscarded(false);
+          setDurationMs(null);
+          setDescOpen(false);
+          startTimer();
+          donePairsRef.current = [...donePairsRef.current, next.pair];
+          prefetchNext([next.pair]);
+          fetchPastWrongWords(next.pair);
+        }
+        return;
+      }
+
       const res = await fetch(buildNextUrl());
       const data = await res.json();
       if (data.done || !data.pair) {
@@ -237,20 +288,17 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
         prefetchNext([data.pair.pair]);
       }
     }
-  }, [current, actualDirection, discarded, durationMs, sessionId, prefetched, direction, resolveDirection, prefetchNext, buildNextUrl]);
+  }, [current, actualDirection, discarded, durationMs, activeSessionId, prefetched, direction, resolveDirection, prefetchNext, buildNextUrl]);
 
-  // Undo last rating (Ctrl+Z)
   const undoLastRating = useCallback(async () => {
     const last = lastRatedRef.current;
     if (!last || !undoAvailable) return;
 
-    // Delete from DB in background
     fetch(`/api/reviews/last?pair=${last.pair.pair}`, { method: "DELETE" }).catch(() => {});
+    sessionResultsRef.current = sessionResultsRef.current.filter((r) => r.pair.pair !== last.pair.pair);
 
-    // Remove from done list
     donePairsRef.current = donePairsRef.current.filter((p) => p !== last.pair.pair);
 
-    // Restore as current in rating phase (answer already visible)
     setCurrent(last.pair);
     setDurationMs(last.durationMs);
     setActualDirection(last.direction);
@@ -260,7 +308,41 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     lastRatedRef.current = null;
   }, [undoAvailable]);
 
-  // Keyboard shortcuts
+  async function startReDrill(failedPairs: Pair[]) {
+    // Create a new DB session for the re-drill
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "custom", directionSetting: direction }),
+    });
+    const data = await res.json();
+    setActiveSessionId(data.id);
+
+    // Reset all state
+    localPairPoolRef.current = failedPairs;
+    sessionResultsRef.current = [];
+    donePairsRef.current = [];
+    lastRatedRef.current = null;
+    prefetchingRef.current = false;
+    setUndoAvailable(false);
+    setPrefetched(null);
+    setDone(false);
+
+    const first = failedPairs[Math.floor(Math.random() * failedPairs.length)];
+    donePairsRef.current = [first.pair];
+    setCurrent(first);
+    setRemaining(failedPairs.length - 1);
+    setTotal(failedPairs.length);
+    setActualDirection(resolveDirection(direction));
+    setPhase("thinking");
+    setDiscarded(false);
+    setDurationMs(null);
+    setDescOpen(false);
+    startTimer();
+    prefetchNext([first.pair]);
+    fetchPastWrongWords(first.pair);
+  }
+
   useEffect(() => {
     if (showConfusion) return;
     function onKey(e: KeyboardEvent) {
@@ -280,7 +362,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   }, [phase, showConfusion, submitReview, undoLastRating]);
 
   async function endSession() {
-    await fetch(`/api/sessions/${sessionId}`, { method: "PATCH" });
+    await fetch(`/api/sessions/${activeSessionId}`, { method: "PATCH" });
     window.location.href = "/dashboard";
   }
 
@@ -293,14 +375,72 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   }
 
   if (done) {
+    const results = sessionResultsRef.current;
+    const instantCount = results.filter((r) => r.result === "instant").length;
+    const slowCount = results.filter((r) => r.result === "slow").length;
+    const failCount = results.filter((r) => r.result === "fail").length;
+    const durations = results.filter((r) => !r.discarded && r.durationMs != null).map((r) => r.durationMs!);
+    const avgMs = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+    const failedPairs = results.filter((r) => r.result === "fail").map((r) => r.pair);
+    const isReDrill = localPairPoolRef.current !== null;
+
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="text-4xl">🎉</div>
-        <h2 className="text-2xl font-bold">Session abgeschlossen!</h2>
-        <p className="text-slate-500">{donePairsRef.current.length} Pairs trainiert</p>
+      <div className="flex flex-col items-center gap-6 py-8 max-w-lg mx-auto">
+        <div className="text-4xl">{failCount === 0 ? "🎉" : "📊"}</div>
+        <h2 className="text-2xl font-bold">{isReDrill ? "Re-Drill abgeschlossen!" : "Session abgeschlossen!"}</h2>
+
+        {/* Summary stats */}
+        <div className="w-full bg-white dark:bg-slate-800 rounded-2xl shadow p-5">
+          <h3 className="font-semibold mb-3 text-slate-600 dark:text-slate-300">Ergebnis: {results.length} Pairs</h3>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-green-600">{instantCount}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Sofort</div>
+              <div className="text-xs text-green-600">{results.length > 0 ? Math.round((instantCount / results.length) * 100) : 0}%</div>
+            </div>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-yellow-600">{slowCount}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Unsicher</div>
+              <div className="text-xs text-yellow-600">{results.length > 0 ? Math.round((slowCount / results.length) * 100) : 0}%</div>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-red-600">{failCount}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Fail</div>
+              <div className="text-xs text-red-600">{results.length > 0 ? Math.round((failCount / results.length) * 100) : 0}%</div>
+            </div>
+          </div>
+          {avgMs != null && (
+            <p className="text-sm text-slate-500 text-center">Ø Zeit: {(avgMs / 1000).toFixed(2)}s</p>
+          )}
+        </div>
+
+        {/* Failed pairs list */}
+        {failedPairs.length > 0 && (
+          <div className="w-full bg-white dark:bg-slate-800 rounded-2xl shadow p-5">
+            <h3 className="font-semibold mb-3 text-red-600">Gefailte Pairs ({failedPairs.length})</h3>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {failedPairs.map((p) => (
+                <Link
+                  key={p.pair}
+                  href={`/pair/${p.pair}`}
+                  className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm px-3 py-1.5 rounded-lg font-mono hover:bg-red-100 transition-colors"
+                >
+                  {p.pair} <span className="font-sans font-normal text-slate-500">{p.word}</span>
+                </Link>
+              ))}
+            </div>
+            <button
+              onClick={() => startReDrill(failedPairs)}
+              className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl"
+            >
+              Fails nochmal trainieren ({failedPairs.length})
+            </button>
+          </div>
+        )}
+
         <button
           onClick={endSession}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl"
         >
           Zum Dashboard
         </button>
@@ -326,6 +466,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       <div className="text-sm text-slate-500 self-stretch flex justify-between">
         <span>
           {mode === "daily_all" ? "Daily All" : mode === "hard_only" ? "Hard Only" : "Custom"}
+          {localPairPoolRef.current !== null && " · Re-Drill"}
           {" "}· {actualDirection === "lp_to_word" ? "LP → Wort" : "Wort → LP"}
         </span>
         <span>{total > 0 ? `${total - remaining + 1} / ${total}` : ""}</span>

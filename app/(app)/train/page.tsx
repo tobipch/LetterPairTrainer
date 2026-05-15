@@ -18,6 +18,7 @@ function TrainPageInner() {
   const [direction, setDirection] = useState<Direction>("lp_to_word");
   const [slowThresholdMs, setSlowThresholdMs] = useState(3000);
   const [loading, setLoading] = useState(false);
+  const [hardOnlyCount, setHardOnlyCount] = useState(50);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -25,6 +26,7 @@ function TrainPageInner() {
       .then((s) => {
         if (s?.directionDefault) setDirection(s.directionDefault);
         if (s?.slowThresholdMs) setSlowThresholdMs(s.slowThresholdMs);
+        if (s?.hardOnlyCount) setHardOnlyCount(s.hardOnlyCount);
       })
       .catch(() => {});
   }, []);
@@ -65,6 +67,7 @@ function TrainPageInner() {
         direction={direction}
         sessionId={sessionId}
         slowThresholdMs={slowThresholdMs}
+        hardOnlyCount={hardOnlyCount}
       />
     );
   }
@@ -104,7 +107,7 @@ function TrainPageInner() {
             <p className="text-xs text-slate-500 mt-1">Alle Pairs einmal, noch nicht von heute</p>
           )}
           {mode === "hard_only" && (
-            <p className="text-xs text-slate-500 mt-1">Top 50 schwierigste Pairs</p>
+            <p className="text-xs text-slate-500 mt-1">Top {hardOnlyCount} schwierigste Pairs</p>
           )}
         </div>
 

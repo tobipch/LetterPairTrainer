@@ -2,12 +2,21 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 interface ActiveSession {
   id: number;
   mode: string;
   directionSetting: string;
   startedAt: string;
+}
+
+interface DayStats {
+  date: string;
+  instant: number;
+  slow: number;
+  fail: number;
+  total: number;
 }
 
 interface OverviewStats {
@@ -29,6 +38,7 @@ interface OverviewStats {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [dailyHistory, setDailyHistory] = useState<DayStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailyDesc, setDailyDesc] = useState("");
   const [savingDaily, setSavingDaily] = useState(false);
@@ -36,9 +46,14 @@ export default function DashboardPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const res = await fetch("/api/stats/overview");
-    const data = await res.json();
+    const [overviewRes, dailyRes] = await Promise.all([
+      fetch("/api/stats/overview"),
+      fetch("/api/stats/daily"),
+    ]);
+    const data = await overviewRes.json();
+    const daily = await dailyRes.json();
     setStats(data);
+    setDailyHistory(daily);
     if (data.dailyWord?.description) setDailyDesc(data.dailyWord.description);
     setLoading(false);
   }
@@ -122,6 +137,38 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* 30-day history chart */}
+      {dailyHistory.some((d) => d.total > 0) && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5">
+          <h2 className="font-semibold mb-3 text-sm text-slate-600 dark:text-slate-300">30-Tage Verlauf</h2>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={dailyHistory} margin={{ top: 0, right: 0, left: -24, bottom: 0 }} barSize={6}>
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v: string) => {
+                  const d = new Date(v + "T00:00:00");
+                  return `${d.getDate()}.${d.getMonth() + 1}`;
+                }}
+                interval={4}
+              />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip
+                formatter={(value: number, name: string) => [value, name === "instant" ? "Sofort" : name === "slow" ? "Unsicher" : "Fail"]}
+                labelFormatter={(label: string) => {
+                  const d = new Date(label + "T00:00:00");
+                  return d.toLocaleDateString("de-DE");
+                }}
+              />
+              <Legend formatter={(v) => v === "instant" ? "Sofort" : v === "slow" ? "Unsicher" : "Fail"} iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="instant" stackId="a" fill="#22c55e" />
+              <Bar dataKey="slow" stackId="a" fill="#eab308" />
+              <Bar dataKey="fail" stackId="a" fill="#ef4444" radius={[2, 2, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

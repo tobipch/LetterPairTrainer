@@ -15,6 +15,13 @@
       "when": 1715600000000,
       "tag": "0001_daily_word",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1715700000000,
+      "tag": "0002_hard_only_count",
+      "breakpoints": true
     }
   ]
 }

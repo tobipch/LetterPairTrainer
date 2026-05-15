@@ -31,6 +31,7 @@ export async function GET() {
 const schema = z.object({
   directionDefault: z.enum(["lp_to_word", "word_to_lp", "random"]).optional(),
   slowThresholdMs: z.number().int().min(500).max(30000).optional(),
+  hardOnlyCount: z.number().int().min(5).max(300).optional(),
   newPassword: z.string().min(6).optional(),
 });
 
@@ -48,6 +49,7 @@ export async function PUT(req: NextRequest) {
     const updateData: Partial<typeof settings.$inferInsert> = {};
     if (parsed.directionDefault) updateData.directionDefault = parsed.directionDefault;
     if (parsed.slowThresholdMs) updateData.slowThresholdMs = parsed.slowThresholdMs;
+    if (parsed.hardOnlyCount != null) updateData.hardOnlyCount = parsed.hardOnlyCount;
 
     if (Object.keys(updateData).length > 0) {
       await db

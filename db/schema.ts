@@ -79,7 +79,8 @@ export const settings = pgTable("settings", {
     .notNull(),
   slowThresholdMs: integer("slow_threshold_ms").default(3000).notNull(),
   dailyWordPair: varchar("daily_word_pair", { length: 4 }),
-  dailyWordDate: varchar("daily_word_date", { length: 10 }), // YYYY-MM-DD
+  dailyWordDate: varchar("daily_word_date", { length: 10 }),
+  hardOnlyCount: integer("hard_only_count").default(50).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
