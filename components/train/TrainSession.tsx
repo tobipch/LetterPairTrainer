@@ -36,6 +36,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   const [initialLoading, setInitialLoading] = useState(true);
   const [undoAvailable, setUndoAvailable] = useState(false);
   const [pastWrongWords, setPastWrongWords] = useState<string[]>([]);
+  const [descOpen, setDescOpen] = useState(false);
 
   // Stores the previous pair so Ctrl+Z can restore it to rating phase
   const lastRatedRef = useRef<{
@@ -211,6 +212,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
       setPhase("thinking");
       setDiscarded(false);
       setDurationMs(null);
+      setDescOpen(false);
       setPrefetched(null);
       startTimer();
       prefetchNext([next.pair.pair]);
@@ -229,6 +231,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
         setPhase("thinking");
         setDiscarded(false);
         setDurationMs(null);
+        setDescOpen(false);
         startTimer();
         donePairsRef.current = [...donePairsRef.current, data.pair.pair];
         prefetchNext([data.pair.pair]);
@@ -359,11 +362,26 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
                 <div className="text-2xl text-blue-600 font-semibold">
                   {actualDirection === "lp_to_word" ? current.word : displayPair(current.pair)}
                 </div>
-                {current.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={current.imageUrl} alt={current.word} className="max-h-32 rounded-lg object-contain" />
-                )}
+                {/* Image slot — always reserved to prevent layout shift */}
+                <div className="w-full flex items-center justify-center h-32">
+                  {current.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={current.imageUrl} alt={current.word} className="max-h-32 rounded-lg object-contain" />
+                  ) : (
+                    <div className="w-full h-full rounded-lg bg-slate-100 dark:bg-slate-700/50" />
+                  )}
+                </div>
+                {/* Description accordion */}
                 {current.description && (
+                  <button
+                    onClick={() => setDescOpen((v) => !v)}
+                    className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+                  >
+                    <span>{descOpen ? "▲" : "▼"}</span>
+                    <span>Beschreibung</span>
+                  </button>
+                )}
+                {descOpen && current.description && (
                   <p className="text-sm text-slate-500 max-w-xs">{current.description}</p>
                 )}
               </>
