@@ -66,7 +66,7 @@ async function main() {
 
   // Get applied migrations
   const applied = await sql(`SELECT hash FROM "__drizzle_migrations"`);
-  const appliedSet = new Set(applied.map((r: { hash: string }) => r.hash));
+  const appliedSet = new Set(applied.map((r) => (r as { hash: string }).hash));
 
   for (const entry of journal.entries) {
     const tag = entry.tag as string;
