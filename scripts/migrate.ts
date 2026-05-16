@@ -22,6 +22,32 @@ if (!DB_URL) {
   process.exit(1);
 }
 
+/** Split SQL text into individual statements, respecting $$ dollar-quote blocks. */
+function splitOnSemicolons(sql: string, out: string[]) {
+  let current = "";
+  let i = 0;
+  let inDollar = false;
+  while (i < sql.length) {
+    if (sql[i] === "$" && sql[i + 1] === "$") {
+      inDollar = !inDollar;
+      current += "$$";
+      i += 2;
+      continue;
+    }
+    if (sql[i] === ";" && !inDollar) {
+      const stmt = current.trim();
+      if (stmt) out.push(stmt);
+      current = "";
+      i++;
+      continue;
+    }
+    current += sql[i];
+    i++;
+  }
+  const remaining = current.trim();
+  if (remaining) out.push(remaining);
+}
+
 async function main() {
   const sql = neon(DB_URL!);
 
@@ -52,11 +78,13 @@ async function main() {
     const filePath = path.join(process.cwd(), "db/migrations", `${tag}.sql`);
     const content = fs.readFileSync(filePath, "utf-8");
 
-    // Split on the drizzle breakpoint marker
-    const statements = content
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Split on the drizzle breakpoint marker, then split each piece on
+    // top-level semicolons (skipping semicolons inside $$ dollar-quote blocks).
+    const rawPieces = content.split("--> statement-breakpoint");
+    const statements: string[] = [];
+    for (const piece of rawPieces) {
+      splitOnSemicolons(piece.trim(), statements);
+    }
 
     console.log(`  apply: ${tag} (${statements.length} statement(s))`);
     for (const stmt of statements) {
