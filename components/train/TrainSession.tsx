@@ -451,7 +451,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
   const isSlowHint = phase === "rating" && !discarded && durationMs != null && durationMs > slowThresholdMs;
 
   return (
-    <div className="flex flex-col items-center gap-6 py-8">
+    <div className="flex flex-col items-center gap-6 py-8 pb-44 sm:pb-8">
       {showConfusion && (
         <ConfusionDialog
           pastWrongWords={pastWrongWords}
@@ -531,70 +531,93 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
         )}
       </div>
 
-      {/* Timer */}
-      <div className={`text-sm font-mono ${discarded ? "line-through text-slate-400" : "text-slate-400"}`}>
+      {/* Timer — desktop only (mobile shows it inside the fixed bar) */}
+      <div className={`hidden sm:block text-sm font-mono ${discarded ? "line-through text-slate-400" : "text-slate-400"}`}>
         {`${((phase === "thinking" ? elapsedMs : (durationMs ?? 0)) / 1000).toFixed(1)}s`}
       </div>
 
-      {/* Actions */}
-      {phase === "thinking" ? (
-        <button
-          onClick={reveal}
-          className="bg-slate-800 dark:bg-slate-600 hover:bg-slate-700 text-white font-semibold px-8 py-4 rounded-2xl text-lg shadow-md active:scale-95"
-        >
-          Auflösen <span className="text-xs font-mono text-slate-400 ml-2 hidden sm:inline">[Space]</span>
-        </button>
-      ) : (
-        <div className="flex flex-col items-center gap-3 w-full max-w-lg">
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
-            <button
-              onClick={() => submitReview("instant")}
-              className="flex-1 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95"
-            >
-              Sofort <span className="text-xs font-mono opacity-70 hidden sm:inline">[1]</span>
-            </button>
-            <button
-              onClick={() => submitReview("slow")}
-              className={`flex-1 font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95 ${
-                isSlowHint
-                  ? "bg-yellow-400 hover:bg-yellow-500 text-slate-900 ring-2 ring-yellow-300"
-                  : "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-slate-900"
-              }`}
-            >
-              Unsicher <span className="text-xs font-mono opacity-70 hidden sm:inline">[2]</span>
-            </button>
-            <button
-              onClick={() => setShowConfusion(true)}
-              className="flex-1 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold py-5 sm:py-4 rounded-xl text-xl sm:text-lg active:scale-95"
-            >
-              Fail <span className="text-xs font-mono opacity-70 hidden sm:inline">[3]</span>
-            </button>
-          </div>
-          <button
-            onClick={() => setDiscarded((v) => !v)}
-            className={`text-sm px-4 py-2 rounded-lg border transition-colors ${
-              discarded
-                ? "border-slate-400 bg-slate-100 dark:bg-slate-700 text-slate-500 line-through"
-                : "border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700"
-            }`}
-          >
-            Zeit verwerfen <span className="text-xs font-mono opacity-70 hidden sm:inline">[D]</span>
-          </button>
+      {/* ─── Action bar ───────────────────────────────────────────────
+          Mobile : fixed to bottom of screen (same position every phase)
+          Desktop: static, inline below the card
+      ──────────────────────────────────────────────────────────────── */}
+      <div className="
+        fixed bottom-0 inset-x-0 z-40
+        bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm
+        border-t border-slate-200 dark:border-slate-700
+        px-4 pt-3 pb-8
+        sm:static sm:inset-x-auto sm:border-0
+        sm:bg-transparent sm:dark:bg-transparent
+        sm:backdrop-filter-none sm:p-0
+        sm:w-full sm:max-w-lg
+      ">
+        {/* Timer inside bar — mobile only */}
+        <div className={`sm:hidden text-xs font-mono text-center mb-2 ${discarded ? "line-through text-slate-400" : "text-slate-400"}`}>
+          {`${((phase === "thinking" ? elapsedMs : (durationMs ?? 0)) / 1000).toFixed(1)}s`}
         </div>
-      )}
 
-      <div className="flex items-center gap-4 mt-2">
-        {undoAvailable && (
+        {phase === "thinking" ? (
           <button
-            onClick={undoLastRating}
-            className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+            onClick={reveal}
+            className="w-full bg-slate-800 dark:bg-slate-600 hover:bg-slate-700 text-white font-semibold py-4 rounded-2xl text-lg shadow-md active:scale-95"
           >
-            ↩ Rückgängig <span className="hidden sm:inline opacity-60">[Ctrl+Z]</span>
+            Auflösen <span className="text-xs font-mono text-slate-400 ml-2 hidden sm:inline">[Space]</span>
           </button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {/* Rating buttons — horizontal on both mobile and desktop */}
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => submitReview("instant")}
+                className="flex-1 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold py-4 rounded-xl text-lg active:scale-95"
+              >
+                Sofort <span className="text-xs font-mono opacity-70 hidden sm:inline">[1]</span>
+              </button>
+              <button
+                onClick={() => submitReview("slow")}
+                className={`flex-1 font-semibold py-4 rounded-xl text-lg active:scale-95 ${
+                  isSlowHint
+                    ? "bg-yellow-400 hover:bg-yellow-500 text-slate-900 ring-2 ring-yellow-300"
+                    : "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-slate-900"
+                }`}
+              >
+                Unsicher <span className="text-xs font-mono opacity-70 hidden sm:inline">[2]</span>
+              </button>
+              <button
+                onClick={() => setShowConfusion(true)}
+                className="flex-1 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold py-4 rounded-xl text-lg active:scale-95"
+              >
+                Fail <span className="text-xs font-mono opacity-70 hidden sm:inline">[3]</span>
+              </button>
+            </div>
+
+            {/* Secondary row */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setDiscarded((v) => !v)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  discarded
+                    ? "border-slate-400 bg-slate-100 dark:bg-slate-700 text-slate-500 line-through"
+                    : "border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700"
+                }`}
+              >
+                Zeit verwerfen <span className="text-xs font-mono opacity-70 hidden sm:inline">[D]</span>
+              </button>
+              <div className="flex items-center gap-3">
+                {undoAvailable && (
+                  <button
+                    onClick={undoLastRating}
+                    className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+                  >
+                    ↩ Rückgängig <span className="hidden sm:inline opacity-60">[Ctrl+Z]</span>
+                  </button>
+                )}
+                <button onClick={endSession} className="text-xs text-slate-400 hover:text-slate-600">
+                  Session beenden
+                </button>
+              </div>
+            </div>
+          </div>
         )}
-        <button onClick={endSession} className="text-xs text-slate-400 hover:text-slate-600">
-          Session beenden
-        </button>
       </div>
     </div>
   );
