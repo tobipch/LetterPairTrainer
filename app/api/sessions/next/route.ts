@@ -38,17 +38,17 @@ export async function GET(req: NextRequest) {
       const limitParam = searchParams.get("limit");
       const limit = limitParam ? parseInt(limitParam) : 50;
       const statsMap = await computeAllPairStats(userId);
-      const scored = allPairs
-        .filter((p) => !exclude.includes(p.pair))
+      const initialPool = allPairs
         .map((p) => ({
           ...p,
           score: statsMap.get(p.pair)?.difficultyScore ?? 1.0,
         }))
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
+      const scored = initialPool.filter((p) => !exclude.includes(p.pair));
       if (!scored.length) return NextResponse.json({ done: true });
       const next = scored[Math.floor(Math.random() * Math.min(10, scored.length))];
-      return NextResponse.json({ pair: next, remaining: scored.length, total: scored.length });
+      return NextResponse.json({ pair: next, remaining: scored.length, total: initialPool.length });
     }
 
     // custom: random from all, excluding done

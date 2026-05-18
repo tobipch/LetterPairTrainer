@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { displayPair } from "@/lib/pairs";
 import { interpolateColor } from "@/lib/colors";
 
@@ -30,6 +31,7 @@ interface PairWithStats {
 type SortKey = "pair" | "word" | "total" | "instantRate" | "slowRate" | "failRate" | "avgDurationMs" | "lastReviewAt" | "difficultyScore";
 
 export default function OverviewPage() {
+  const router = useRouter();
   const [pairs, setPairs] = useState<PairWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -141,14 +143,17 @@ export default function OverviewPage() {
             {filtered.map((p) => {
               const color = interpolateColor(p.stats.difficultyScore);
               return (
-                <tr key={p.pair} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <tr
+                  key={p.pair}
+                  onClick={() => router.push(`/pair/${p.pair}`)}
+                  className="hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
+                >
                   <td className="px-3 py-2 font-mono font-bold">
-                    <Link href={`/pair/${p.pair}`} className="hover:text-blue-600 hover:underline">
-                      {displayPair(p.pair)}
-                    </Link>
+                    {displayPair(p.pair)}
                   </td>
                   <td
-                    className="px-3 py-2 cursor-text"
+                    className="px-3 py-2"
+                    onClick={(e) => e.stopPropagation()}
                     onDoubleClick={() => {
                       setEditingPair(p.pair);
                       setEditValue(p.word);
