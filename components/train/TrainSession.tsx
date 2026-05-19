@@ -306,6 +306,7 @@ export default function TrainSession({ mode, direction, sessionId, slowThreshold
     setDiscarded(false);
     setUndoAvailable(false);
     lastRatedRef.current = null;
+    fetchPastWrongWords(last.pair.pair);
   }, [undoAvailable]);
 
   async function startReDrill(failedPairs: Pair[]) {
