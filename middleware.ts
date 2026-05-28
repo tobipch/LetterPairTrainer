@@ -8,10 +8,11 @@ export async function middleware(req: NextRequest) {
 
   const isAuth = !!session.userId;
   const isLoginPage = req.nextUrl.pathname === "/login";
+  const isResetPage = req.nextUrl.pathname === "/reset-password";
   const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
   const isApi = req.nextUrl.pathname.startsWith("/api");
 
-  if (!isAuth && !isLoginPage && !isApiAuth) {
+  if (!isAuth && !isLoginPage && !isResetPage && !isApiAuth) {
     if (isApi) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
